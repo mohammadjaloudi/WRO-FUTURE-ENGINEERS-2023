@@ -38,8 +38,8 @@ void setup() {
 int fdis, rdis, ldis;
 
 void loop() {
-  readSensors();  // Read sensor data
-  controlServo(); // Control servo based on sensor data
+  readSensors(); // Read sensor data
+  controlServo(); // Control servo based on sensor data and commands from Raspberry Pi
 }
 
 void moveForward() {
@@ -81,16 +81,21 @@ void readSensors() {
 }
 
 void controlServo() {
-  analogWrite(pwm1, 80);
-  moveForward();
-  turnBack();
-  
-  if (fdis < 70) {
-    if (ldis < rdis) {
-      turnRight();
-    }
-    if (rdis < ldis) {
-      turnLeft();
+  if (Serial.available() > 0) {
+    char command = Serial.read();
+    switch (command) {
+      case 'R':
+        turnRight();
+        break;
+      case 'L':
+        turnLeft();
+        break;
+      case 'F':
+        moveForward();
+        break;
+      default:
+        // Handle unrecognized commands or add more cases as needed
+        break;
     }
   }
 }
