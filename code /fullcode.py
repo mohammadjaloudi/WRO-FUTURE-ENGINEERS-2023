@@ -8,6 +8,7 @@ from imutils.video import VideoStream
 from collections import deque
 from gpiozero import Motor
 
+
 # Initialize the camera using multithreading
 vs = VideoStream(src=0).start()  # Use src=0 for the default camera (you can change this)
 time.sleep(2.0)
