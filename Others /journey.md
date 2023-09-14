@@ -15,7 +15,7 @@ We used the Servo and NewPing libraries for Arduino control. However, we encount
 
 Raspberry Pi:
 We used the serial, time, numpy, and OpenCV libraries. We programmed it to use the camera to detect red and green colors and send signals to the Arduino when it detected a red block, green block, or nothing.
-
+ 
 Now, let's talk about the hardware. I'll mention the parts we used:
 
 Servo motor
