@@ -8,20 +8,18 @@ After we entered the second stage, we received new training, which was about cam
 
 After that, we fixed the Raspberry Pi. It turned out to be a simple problem; we needed to download the latest update for it, though we weren't sure why. Then we began working. Our team consisted of two participants: my brother and me. We divided the work—my brother handled hardware wiring and Arduino programming, while I focused on Raspberry Pi programming, circuit design, and documentation.
 
+but for no reason arduino is not working so we changed to raspbberry pi.
+
 Now that I've summarized our journey, I'll explain a few things about the car. I'll start with the coding:
 
-Arduino:
-We used the Servo and NewPing libraries for Arduino control. However, we encountered a bug with the Servo library, which affected pins 9 and 10. It took us 17 hours to figure that out. Our Arduino program consists of two main parts: one for receiving serial commands from the Raspberry Pi to move left, right, or forward based on detecting red and green colors, and another for normal movement when there are no obstacles.
-
 Raspberry Pi:
-We used the serial, time, numpy, and OpenCV libraries. We programmed it to use the camera to detect red and green colors and send signals to the Arduino when it detected a red block, green block, or nothing.
+We used cv2, numpy, serial, imutils, time, gpiozero, imutils.video, collections and gpiozero libraries
  
 Now, let's talk about the hardware. I'll mention the parts we used:
 
 Servo motor
 DC motor
 Three ultrasonic sensors
-Arduino
 Raspberry Pi
 Wires
 Breadboard
