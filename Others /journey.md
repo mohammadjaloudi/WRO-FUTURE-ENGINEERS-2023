@@ -29,4 +29,5 @@ Motor driver
 Raspberry Pi camera
 Our robot operates like this: It starts working, detects if there's any block in front of it, turns left or right depending on the situation, and completes three rotations around the arena.
 
+
 For me, this competition was amazing. It was the first time I participated in a competition with my primary goal being learning, and I'm sure my brother shared the same sentiment. This was a summarized journey and information about us and our robot. I hope you enjoyed reading this.
