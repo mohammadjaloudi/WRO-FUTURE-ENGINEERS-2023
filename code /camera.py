@@ -3,7 +3,6 @@
 
 import cv2
 import numpy as np
-import serial
 import imutils
 import time
 from gpiozero import Button
@@ -33,9 +32,6 @@ r_max_hsv = np.array([10, 255, 255])
 g_area_thresh = 300
 r_area_thresh = 300
 
-# Initialize serial connection to Arduino (change the port as needed)
-ser = serial.Serial('/dev/ttyUSB0', 9600)  # Use the correct serial port
-
 # Create a button object and specify the GPIO pin where the button is connected
 button = Button(17)  # Replace 17 with the actual GPIO pin number
 
@@ -63,7 +59,6 @@ def start_detection():
         pass
 
     vs.stop()
-    ser.close()  # Close the serial connection
     cv2.destroyAllWindows()
     detection_running = False
 
@@ -99,10 +94,6 @@ def detect_green(frame):
             last_g_center = g_center
             last_g_radius = g_radius
 
-    if last_g_radius is not None:
-        ser.write(b'L')  # Send 'L' to Arduino for left
-        print("Start turn left from the center point:", last_g_center, "Color: green")
-
     return last_g_center, last_g_radius
 
 # Function to detect red color
@@ -136,10 +127,6 @@ def detect_red(frame):
             rp.appendleft(r_center)
             last_r_center = r_center
             last_r_radius = r_radius
-
-    if last_r_radius is not None:
-        ser.write(b'R')  # Send 'R' to Arduino for right
-        print("Start turn right from the center point:", last_r_center, "Color: red")
 
     return last_r_center, last_r_radius
 
