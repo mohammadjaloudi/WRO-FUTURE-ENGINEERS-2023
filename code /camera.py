@@ -7,6 +7,7 @@ import imutils
 import time
 from imutils.video import VideoStream
 from collections import deque
+import math
 
 # Initialize the camera using multithreading
 vs = VideoStream(src=1).start()  # Use src=0 for the default camera (you can change this)
@@ -15,21 +16,30 @@ time.sleep(2.0)
 # Define a kernel for morphological operations
 k = np.ones((5, 5), np.uint8)
 
-# Create deques to store tracked green and red points
-gp = deque(maxlen=10)
+# For collecting red or green for the arduino
+redColorClose = '0'
+greenColorClose = '0'
+
+# Create deques to store tracked red and green points
 rp = deque(maxlen=10)
+gp = deque(maxlen=10)
 
 # Define HSV color ranges for green and red
 g_min_hsv = np.array([37, 38, 24])
 g_max_hsv = np.array([99, 255, 255])
 
-# Adjusted HSV color ranges for detecting red
-r_min_hsv = np.array([0, 100, 100])
-r_max_hsv = np.array([10, 255, 255])
+# Combined HSV color range for all shades of red
+red_min_hsv = np.array([0, 100, 100])
+red_max_hsv = np.array([179, 255, 255])  # Covering the entire hue range for red
 
 # Define area thresholds for detection
 g_area_thresh = 300
 r_area_thresh = 300
+
+# Global variables to store detection results
+ed = "N"  # Initialize as "Not detected"
+een = "N"  # Initialize as "Not detected"
+closest_color = "None"  # Initialize as "None"
 
 # Global variable to control the detection loop
 detection_running = True
@@ -39,15 +49,15 @@ cv2.namedWindow("Camera Feed", cv2.WINDOW_NORMAL)
 
 # Function to start color detection
 def start_detection():
-    global detection_running
+    global detection_running, ed, een, closest_color, greenColorClose, redColorClose
 
     try:
         while detection_running:
             frame = vs.read()
             frame = imutils.resize(frame, width=300)
 
-            green_center, green_radius, green_area = detect_color(frame, g_min_hsv, g_max_hsv, (0, 255, 0), g_area_thresh)
-            red_center, red_radius, red_area = detect_color(frame, r_min_hsv, r_max_hsv, (0, 0, 255), r_area_thresh)
+            green_center, green_radius, _ = detect_color(frame, g_min_hsv, g_max_hsv, (0, 255, 0), g_area_thresh)
+            red_center, red_radius, _ = detect_color(frame, red_min_hsv, red_max_hsv, (0, 0, 255), r_area_thresh)
 
             # Display the camera feed in the window
             cv2.imshow("Camera Feed", frame)
@@ -56,16 +66,39 @@ def start_detection():
             if key == ord("q"):
                 break
 
-            # Determine the farther object based on area
-            if green_area is not None and red_area is not None:
-                if green_area > red_area:
-                    print("Farther Object: Green")
+            # Calculate the distance between detected object centers
+            if green_center is not None and red_center is not None:
+                green_x, green_y = green_center
+                red_x, red_y = red_center
+                distance_green_red = math.sqrt((green_x - red_x) ** 2 + (green_y - red_y) ** 2)
+
+                # Determine the closest color
+                if distance_green_red < min(green_radius, red_radius):
+                    closest_color = "RED"
+                    redColorClose = 'R'
+                elif distance_green_red < green_radius:
+                    closest_color = "Green"
+                    greenColorClose = 'L'
+                elif distance_green_red < red_radius:
+                    closest_color = "Red"
+                    redColorClose = 'R'
                 else:
-                    print("Farther Object: Red")
-            elif green_area is not None:
-                print("Farther Object: Green")
-            elif red_area is not None:
-                print("Farther Object: Red")
+                    closest_color = "Red"
+                    redColorClose = 'R'
+
+            else:
+                # If only one color is detected, set closest_color accordingly
+                if green_center is not None:
+                    closest_color = "Green"
+                    greenColorClose = 'L'
+                elif red_center is not None:
+                    closest_color = "Red"
+                    redColorClose = 'R'
+                else:
+                    closest_color = "None"
+
+            # Print the closest color in the loop
+            print("Closest Color:", closest_color)
 
     except KeyboardInterrupt:
         pass
@@ -90,29 +123,25 @@ def detect_color(frame, min_hsv, max_hsv, color, area_thresh):
 
     last_center = None
     last_radius = None
-    max_area = None
 
     # Process contours
     for contour in contours:
         max_area_contour = max(contours, key=cv2.contourArea)
         ((x, y), radius) = cv2.minEnclosingCircle(max_area_contour)
-        m = cv2.moments(max_area_contour)
-        center = (int(m["m10"] / m["m00"]), int(m["m01"] / m["m00"]))
 
         if radius > 10 and cv2.contourArea(max_area_contour) > area_thresh:
             cv2.circle(frame, (int(x), int(y)), int(radius), color, 2)
-            cv2.circle(frame, center, 5, (0, 255, 255), -1)
+            cv2.circle(frame, (int(x), int(y)), 5, (0, 255, 255), -1)
 
-            if color == (0, 255, 0):
-                gp.appendleft(center)
-            elif color == (0, 0, 255):
-                rp.appendleft(center)
+            if color == (0, 0, 255):
+                rp.appendleft((int(x), int(y)))
+            elif color == (0, 255, 0):
+                gp.appendleft((int(x), int(y)))
 
-            last_center = center
+            last_center = (int(x), int(y))
             last_radius = radius
-            max_area = cv2.contourArea(max_area_contour)
 
-    return last_center, last_radius, max_area
+    return last_center, last_radius, None
 
 # Start the color detection loop
 start_detection()
