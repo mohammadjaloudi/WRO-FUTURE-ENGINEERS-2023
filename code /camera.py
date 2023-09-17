@@ -5,26 +5,25 @@ import cv2
 import numpy as np
 import imutils
 import time
-from gpiozero import Button
 from imutils.video import VideoStream
 from collections import deque
 
 # Initialize the camera using multithreading
-vs = VideoStream(src=0).start()  # Use src=0 for the default camera (you can change this)
+vs = VideoStream(src=1).start()  # Use src=0 for the default camera (you can change this)
 time.sleep(2.0)
 
 # Define a kernel for morphological operations
 k = np.ones((5, 5), np.uint8)
 
-# Create deques to store tracked pillar points
+# Create deques to store tracked green and red points
 gp = deque(maxlen=10)
-rp = deque(maxlen=100)
+rp = deque(maxlen=10)
 
 # Define HSV color ranges for green and red
 g_min_hsv = np.array([37, 38, 24])
 g_max_hsv = np.array([99, 255, 255])
 
-# Adjusted HSV color ranges for darker and less lenient red
+# Adjusted HSV color ranges for detecting red
 r_min_hsv = np.array([0, 100, 100])
 r_max_hsv = np.array([10, 255, 255])
 
@@ -32,28 +31,41 @@ r_max_hsv = np.array([10, 255, 255])
 g_area_thresh = 300
 r_area_thresh = 300
 
-# Create a button object and specify the GPIO pin where the button is connected
-button = Button(17)  # Replace 17 with the actual GPIO pin number
-
 # Global variable to control the detection loop
-detection_running = False
+detection_running = True
+
+# Create a window to display the camera feed
+cv2.namedWindow("Camera Feed", cv2.WINDOW_NORMAL)
 
 # Function to start color detection
 def start_detection():
     global detection_running
-    detection_running = True
 
     try:
         while detection_running:
             frame = vs.read()
             frame = imutils.resize(frame, width=300)
 
-            green_center, green_radius = detect_green(frame)
-            red_center, red_radius = detect_red(frame)
+            green_center, green_radius, green_area = detect_color(frame, g_min_hsv, g_max_hsv, (0, 255, 0), g_area_thresh)
+            red_center, red_radius, red_area = detect_color(frame, r_min_hsv, r_max_hsv, (0, 0, 255), r_area_thresh)
+
+            # Display the camera feed in the window
+            cv2.imshow("Camera Feed", frame)
 
             key = cv2.waitKey(1)
             if key == ord("q"):
                 break
+
+            # Determine the farther object based on area
+            if green_area is not None and red_area is not None:
+                if green_area > red_area:
+                    print("Farther Object: Green")
+                else:
+                    print("Farther Object: Red")
+            elif green_area is not None:
+                print("Farther Object: Green")
+            elif red_area is not None:
+                print("Farther Object: Red")
 
     except KeyboardInterrupt:
         pass
@@ -62,84 +74,46 @@ def start_detection():
     cv2.destroyAllWindows()
     detection_running = False
 
-# Function to detect green color
-def detect_green(frame):
+# Function to detect color (both green and red)
+def detect_color(frame, min_hsv, max_hsv, color, area_thresh):
     # Apply Gaussian blur and convert to HSV color space
     bf = cv2.GaussianBlur(frame, (11, 11), 0)
     hsv_frame = cv2.cvtColor(bf, cv2.COLOR_BGR2HSV)
 
-    # Green Mask
-    g_mask = cv2.inRange(hsv_frame, g_min_hsv, g_max_hsv)
-    g_mask = cv2.morphologyEx(g_mask, cv2.MORPH_OPEN, k)
+    # Color Mask
+    mask = cv2.inRange(hsv_frame, min_hsv, max_hsv)
+    mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, k)
 
     # Find contours in masks
-    g_contours = cv2.findContours(g_mask.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-    g_contours = imutils.grab_contours(g_contours)
+    contours = cv2.findContours(mask.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    contours = imutils.grab_contours(contours)
 
-    last_g_center = None
-    last_g_radius = None
+    last_center = None
+    last_radius = None
+    max_area = None
 
-    # Process green contours
-    for g_contour in g_contours:
-        max_area_contour = max(g_contours, key=cv2.contourArea)
-        ((gx, gy), g_radius) = cv2.minEnclosingCircle(max_area_contour)
-        gm = cv2.moments(max_area_contour)
-        g_center = (int(gm["m10"] / gm["m00"]), int(gm["m01"] / gm["m00"]))
+    # Process contours
+    for contour in contours:
+        max_area_contour = max(contours, key=cv2.contourArea)
+        ((x, y), radius) = cv2.minEnclosingCircle(max_area_contour)
+        m = cv2.moments(max_area_contour)
+        center = (int(m["m10"] / m["m00"]), int(m["m01"] / m["m00"]))
 
-        if g_radius > 10:
-            cv2.circle(frame, (int(gx), int(gy)), int(g_radius), (0, 255, 0), 2)
-            cv2.circle(frame, g_center, 5, (0, 255, 255), -1)
+        if radius > 10 and cv2.contourArea(max_area_contour) > area_thresh:
+            cv2.circle(frame, (int(x), int(y)), int(radius), color, 2)
+            cv2.circle(frame, center, 5, (0, 255, 255), -1)
 
-            gp.appendleft(g_center)
-            last_g_center = g_center
-            last_g_radius = g_radius
+            if color == (0, 255, 0):
+                gp.appendleft(center)
+            elif color == (0, 0, 255):
+                rp.appendleft(center)
 
-    return last_g_center, last_g_radius
+            last_center = center
+            last_radius = radius
+            max_area = cv2.contourArea(max_area_contour)
 
-# Function to detect red color
-def detect_red(frame):
-    # Apply Gaussian blur and convert to HSV color space
-    bf = cv2.GaussianBlur(frame, (11, 11), 0)
-    hsv_frame = cv2.cvtColor(bf, cv2.COLOR_BGR2HSV)
-
-    # Red Mask (adjusted for darker and less lenient red)
-    r_mask = cv2.inRange(hsv_frame, r_min_hsv, r_max_hsv)
-    r_mask = cv2.morphologyEx(r_mask, cv2.MORPH_OPEN, k)
-
-    # Find contours in masks
-    r_contours = cv2.findContours(r_mask.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-    r_contours = imutils.grab_contours(r_contours)
-
-    last_r_center = None
-    last_r_radius = None
-
-    # Process red contours
-    for r_contour in r_contours:
-        max_area_contour = max(r_contours, key=cv2.contourArea)
-        ((rx, ry), r_radius) = cv2.minEnclosingCircle(max_area_contour)
-        rm = cv2.moments(max_area_contour)
-        r_center = (int(rm["m10"] / rm["m00"]), int(rm["m01"] / rm["m00"]))
-
-        if r_radius > 10:
-            cv2.circle(frame, (int(rx), int(ry)), int(r_radius), (0, 0, 255), 2)
-            cv2.circle(frame, r_center, 5, (0, 255, 255), -1)
-
-            rp.appendleft(r_center)
-            last_r_center = r_center
-            last_r_radius = r_radius
-
-    return last_r_center, last_r_radius
-
-# Callback function to start/stop color detection when the button is pressed
-def button_pressed():
-    global detection_running
-    if detection_running:
-        detection_running = False
-    else:
-        start_detection()
-
-# Bind the button press event to the callback function
-button.when_pressed = button_pressed
+    return last_center, last_radius, max_area
 
 # Start the color detection loop
 start_detection()
+
